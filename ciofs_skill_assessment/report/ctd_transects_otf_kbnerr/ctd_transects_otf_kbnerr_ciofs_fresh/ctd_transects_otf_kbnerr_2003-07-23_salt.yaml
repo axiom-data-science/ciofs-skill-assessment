@@ -1,0 +1,32 @@
+bias:
+  long_name: Bias or MSD
+  name: Bias
+  value: 3.61311521595246
+corr:
+  long_name: Pearson product-moment correlation coefficient
+  name: Correlation Coefficient
+  value: 0.44294784858545383
+descriptive:
+  long_name: Max, Min, Mean, Standard Deviation
+  name: Descriptive Statistics
+  value:
+  - 31.621598315747274
+  - 25.752783012688344
+  - 29.785472880186035
+  - 1.4044404804937285
+ioa:
+  long_name: Index of Agreement (Willmott 1981)
+  name: Index of Agreement
+  value: .nan
+mse:
+  long_name: Mean Squared Error (MSE)
+  name: Mean Squared Error
+  value: 91.09092197238863
+rmse:
+  long_name: Root Mean Square Error (RMSE)
+  name: RMSE
+  value: 9.544156430632759
+ss:
+  long_name: Skill Score (Bogden 1996)
+  name: Skill Score
+  value: -0.037839092810165065

@@ -1,6 +1,6 @@
 # Comparison skill assessment for two CIOFS hindcast models.
 
-This project has the scripts and notebook/markdown report files to compare the performance of two hindcast versions of the Cook Inlet Operational Forecast System (CIOFS) ROMS model with data. The plots and pages from this project are in the report located at [ciofs-fresh.axds.co](https://ciofs-fresh.axds.co).
+This project has the scripts and notebook/markdown report files to compare the performance of two hindcast versions of the Cook Inlet Operational Forecast System (CIOFS) ROMS model with data. The plots and pages from this project are in the report located at [ciofs-fresh.axds.co](https://ciofs-fresh.axds.co) and the rest of the report repository is at https://github.com/axiom-data-science/ciofs-freshwater-report.
 
 
 ## Initial steps
@@ -50,4 +50,4 @@ The HF Radar data analysis has not been integrated as fully into OMSA as the oth
 
 ## Now what?
 
-Once these steps are complete, complete the other parts of the report. Then compile the Jupyter book report.
+Once these steps are complete, complete the other parts of the report. Then compile the Jupyter book report. The report repository is at https://github.com/axiom-data-science/ciofs-freshwater-report.

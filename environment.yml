@@ -4,30 +4,28 @@ channels:
 dependencies:
   - python=3.11
   # Required for full project functionality (dont remove)
-  - pytest
-  - cmocean
-  - ffmpeg
-  - geoviews
-  - h5netcdf
-  - hvplot
-  - intake-erddap
-  - jupytext
-  # - jupyter
-  # - jupyter-book
-  - kerchunk
-  - matplotlib-base
-  - oceans
-  - ocean-model-skill-assessor
-  - fastparquet
-  - pandas
+  - pytest=8.3.2
+  - cmocean=4.0.3
+  - fastparquet=2024.2.0
+  - ffmpeg=7.1.0
+  - geoviews=1.12.0
+  - h5netcdf=1.3.0
+  - hvplot=0.10.0
+  - intake-erddap=0.5.2
+  - jupytext=1.16.4
+  - kerchunk=0.2.5
+  - matplotlib-base=3.9.1
+  - oceans=1.1.4
+  - ocean-model-skill-assessor=1.3.2
+  - pandas=2.2.2
   - pip
-  - report-utils
-  - seaborn
-  - xesmf
-  - xroms
+  - report-utils=0.1.0
+  - seaborn=0.13.2
+  - xesmf=0.8.7
+  - xroms=0.6.1
   - pip:
-    - myst-nb
-    - intake-coops
+    - myst-nb==1.1.1
+    - intake-coops==0.4.0
     # - noaa_coops>=0.3.2
     - git+https://github.com/kthyng/noaa_coops.git@toml
   #   - geopy

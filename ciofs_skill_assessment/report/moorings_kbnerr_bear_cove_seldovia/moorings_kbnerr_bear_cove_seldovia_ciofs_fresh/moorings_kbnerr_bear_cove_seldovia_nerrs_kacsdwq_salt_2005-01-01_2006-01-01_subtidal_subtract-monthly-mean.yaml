@@ -6,14 +6,22 @@ corr:
   long_name: Pearson product-moment correlation coefficient
   name: Correlation Coefficient
   value: 0.28203421363336967
-descriptive:
-  long_name: Max, Min, Mean, Standard Deviation
-  name: Descriptive Statistics
+descriptive_model:
+  long_name: Max, Min, Mean, Standard Deviation (Model)
+  name: Descriptive Statistics (Model)
   value:
   - 1.5519823145119567
   - -0.6893166139338156
   - 0.4370844753662258
   - 0.4404493800827626
+descriptive_obs:
+  long_name: Max, Min, Mean, Standard Deviation (Observation)
+  name: Descriptive Statistics (Observation)
+  value:
+  - 1.394161056862906
+  - -1.5179139933699908
+  - 0.19052800911294349
+  - 0.4950352449459339
 dist:
   long_name: Distance in km from data location to selected model location
   name: Distance
@@ -21,16 +29,24 @@ dist:
 ioa:
   long_name: Index of Agreement (Willmott 1981)
   name: Index of Agreement
-  value: .nan
+  value: 0.5516430238514595
 mse:
   long_name: Mean Squared Error (MSE)
   name: Mean Squared Error
-  value: 0.376863353862094
+  value: 0.31606392790336896
 rmse:
   long_name: Root Mean Square Error (RMSE)
   name: RMSE
+  value: 0.5621956313449696
+rmse_uncentered:
+  long_name: Root Mean Square Error (RMSE), uncentered
+  name: RMSE
   value: 0.6138919724691747
 ss:
-  long_name: Skill Score (Bogden 1996)
+  long_name: Skill Score (Taylor 2001)
   name: Skill Score
+  value: 0.6324704671909251
+ss_orig:
+  long_name: Skill Score (Bogden 1996)
+  name: Murphy Skill Score
   value: -0.5377952024878025

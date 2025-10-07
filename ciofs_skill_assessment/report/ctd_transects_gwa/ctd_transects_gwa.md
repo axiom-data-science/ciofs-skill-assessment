@@ -26,13 +26,23 @@ import cook_inlet_catalogs as cic
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/ctd_transects_gwa.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/ctd_transects_gwa.html).
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
+
 
 ```{code-cell}
 :tags: [remove-input]
 
 cat = intake.open_catalog(cic.utils.cat_path("ctd_transects_gwa"))
 dd, ddlabels = cic.utils.combine_datasets_for_map(cat)
-dd.hvplot(**cat.metadata["map"]) * ddlabels.hvplot(**cat.metadata["maplabels"])
+map = cat.metadata["map"]
+maplabels = cat.metadata["maplabels"]
+imatches = dd["station"].str.fullmatch("|".join(['transect_3-2012-05-02', 'transect_4-2012-05-02', 'transect_6-2012-05-03', 'transect_7-2012-07-30', 'transect_9-2012-02-14', 'transect_AlongBay-2012-08-15']))
+dduse = dd.loc[imatches]
+ddlabelsuse = ddlabels.loc[imatches].copy()
+ddlabelsuse["Station names"] = ['GWA: Transect 3 (repeated)', 'GWA: Transect 4 (repeated)', 'GWA: Transect 6 (repeated)', 'GWA: Transect 7 (repeated)', 'GWA: Transect 9 (repeated)', 'GWA: Transect AlongBay (repeated)']
+maplabels = cat.metadata["maplabels"].copy()
+maplabels["text"] = "Station names"
+dduse.hvplot(**cat.metadata["map"]) * ddlabelsuse.hvplot(**maplabels)
 ```
 
 ## transect_3-2012-05-02

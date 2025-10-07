@@ -26,13 +26,23 @@ import cook_inlet_catalogs as cic
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/ctd_transects_uaf.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/ctd_transects_uaf.html).
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
+
 
 ```{code-cell}
 :tags: [remove-input]
 
 cat = intake.open_catalog(cic.utils.cat_path("ctd_transects_uaf"))
 dd, ddlabels = cic.utils.combine_datasets_for_map(cat)
-dd.hvplot(**cat.metadata["map"]) * ddlabels.hvplot(**cat.metadata["maplabels"])
+map = cat.metadata["map"]
+maplabels = cat.metadata["maplabels"]
+imatches = dd["station"].str.fullmatch("|".join(['Transect_01']))
+dduse = dd.loc[imatches]
+ddlabelsuse = ddlabels.loc[imatches].copy()
+ddlabelsuse["Station names"] = ['UAF (repeated)']
+maplabels = cat.metadata["maplabels"].copy()
+maplabels["text"] = "Station names"
+dduse.hvplot(**cat.metadata["map"]) * ddlabelsuse.hvplot(**maplabels)
 ```
 
 ## Transect_01

@@ -6,25 +6,29 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: ciofs-skill-assessment
+  display_name: ciofs-freshwater-report
   language: python
   name: python3
 ---
 
 # Overview Mooring Data
 
-In the map below, some stations are at the same or nearly same location, in which case the marker representing their location is shifted slightly to allow for both to be seen.
+In the map below, some stations are at the same or nearly same location, in which case the marker representing their location is shifted slightly to allow for both to be seen. Datasets that span more than 1 year are represented by the number of years they span: one marker per year. By necessity these markers are moved in space from the actual station location and arranged into a grid so they can all be seen. Therefore, their locations in the skill score plots do not represent their actual locations.
 
-In the skill score plots below, datasets that span more than 1 year are represented by the number of years they span: one marker per year. By necessity these markers are moved in space from the actual station location and arranged into a grid so they can all be seen. Therefore, their locations in the skill score plots do not represent their actual locations.
+The skill scores below represent the skill of each model by variable and processing listed. The models perform similarly for sea surface height: they capture the tidal signal well and the subtidal signal less well, though some improvement is noticeable for CIOFS fresh as compared with CIOFS hindcast for the subtidal sea surface height. The models perform similarly for temperature; they capture the tidal and subtidal seasonal cycles and do moderately well on the subtiddal temperature with the monthly anomaly subtracted. For salinity, CIOFS fresh shows moderate improvement over CIOFS hindcast.
 
-[75MB zipfile of plots](https://files.axds.co/ciofs_fresh/zip/moorings.zip)
+[91MB zipfile of plots and stats files](https://files.axds.co/ciofs_fresh/zip/moorings.zip)
 
 ```{code-cell} ipython3
 :tags: [remove-input]
 
 import intake
 import numpy as np
-import ocean_model_skill_assessor as omsa
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import matplotlib.pyplot as plt
+    import ocean_model_skill_assessor as omsa
 import cook_inlet_catalogs as cic
 import pandas as pd
 import xarray as xr
@@ -33,9 +37,37 @@ import cmocean
 import yaml
 from myst_nb import glue
 from datetimerange import DateTimeRange
-import more_utils as mu
+from holoviews import opts
+from dateparser.search import search_dates
+from bokeh.models import FixedTicker
+import holoviews as hv
+import os
+from pathlib import Path
+import subprocess
 
+
+ins_type = "moorings"  # instrument name
+models = ["ciofs_hindcast", "ciofs_fresh"]
 years = [2003, 2004, 2005, 2006, 2012, 2013, 2014]
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def save_png(abs_path, figname):
+    # Define the command and its arguments
+    cmd = [
+        "playwright",
+        "screenshot",
+        f"file://{abs_path}",
+        f"{figname}.png",
+        # "--full-page",
+        "--wait-for-timeout=30000"
+    ]
+
+    # Run the command
+    if not Path(f"{figname}.png").exists():
+        result = subprocess.run(cmd, capture_output=True, text=True)
 ```
 
 ## Map of Stations
@@ -67,6 +99,15 @@ slugs = [        "moorings_aoos_cdip",
         "moorings_noaa",
         "moorings_uaf",
         ]
+slug_names = {"moorings_aoos_cdip": "AOOS CDIP",
+              "moorings_circac": "CIRCAC",
+              "moorings_kbnerr": "KBNERR",
+              "moorings_kbnerr_bear_cove_seldovia": "KBNERR B. Cove/Seldovia",
+              "moorings_kbnerr_historical": "KBNERR Historical",
+              "moorings_kbnerr_homer": "KBNERR Homer",
+              "moorings_noaa": "NOAA",
+              "moorings_uaf": "UAF",
+              }
 rows = []
 icount = 1
 icount2 = 1
@@ -99,29 +140,73 @@ for slug in slugs:
         elif slug == "moorings_kbnerr":
             lat += icount3*0.0025            
             icount3+= 1
-        start_time = cat[source_name].metadata["minTime"]
-        rows.append([source_name, lon, lat, start_time, slug])
-df = pd.DataFrame(rows, columns=["station","lon","lat","date_time", "slug"])
+        start_time = pd.Timestamp(cat[source_name].metadata["minTime"])
+        end_time = pd.Timestamp(cat[source_name].metadata["maxTime"])
+        rows.append([source_name, lon, lat, start_time, end_time, slug, slug_names[slug]])
+df = pd.DataFrame(rows, columns=["station","lon","lat","start_time", "end_time", "slug", "slug_name"])
 ```
 
 ```{code-cell} ipython3
 :tags: [remove-input, full-width]
 
-pts_plot = df.hvplot.points(x="lon", y="lat", color="k",
-                legend=False, geo=True, tiles=True, size=35, hover_cols=["station","date_time","slug"],
-                coastline=False, xlabel="Longitude", ylabel="Latitude", title="Moorings",
-                width=600, height=700, marker="o")
-labels_plot = df.hvplot.labels(x="lon", y="lat", text="station", geo=True, text_alpha=0.5,
-            hover=False, text_baseline='bottom', fontscale=1.5, text_font_size='10pt', text_color="k")
+figname = f"{ins_type}_map"
+abs_path = os.path.abspath(f"{figname}.html")
 
-fmap = pts_plot * labels_plot
+fmap = df.hvplot.points(x="lon", y="lat", by="slug_name",
+                legend="top_left", geo=True, tiles=True, size=50, hover_cols=["station","start_time","end_time"],
+                coastline=False, xlabel="Longitude", ylabel="Latitude", title="Moorings",
+                width=600, height=700, marker="o", fontscale=1.2, alpha=0.75)
+if not Path(f"{figname}.png").exists():
+    hv.save(fmap, figname, fmt='html')
+    save_png(abs_path, figname)
+
 glue("fig_map", fmap, display=False)
 ```
 
 ```{glue:figure} fig_map
 :name: "fig-overview-moorings-map"
 
-All mooring stations.
+All mooring stations, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
+```
+
++++
+
+````{div} full-width                
+```{figure} moorings_map.png
+:name: "fig-overview-moorings-map"
+
+All mooring stations, by project. (PNG screenshot, available for PDF and for saving image.)
+```
+````
+
++++
+
+## Taylor Diagrams
+
+Taylor diagrams summarize the skill of the two models in capturing the moorings datasets. The data has been grouped by region (Figs. {numref}`{number}<fig-moorings_by_region_ssh>`, {numref}`{number}<fig-moorings_by_region_temp>`, and {numref}`{number}<fig-moorings_by_region_salt>`). Sea surface height ({numref}`Fig. {number}<fig-moorings_by_region_ssh>`) is captured well by the models outside of Cook Inlet and in Upper Cook Inlet, but less well in Kachemak Bay. Both models have too low variance and correlation in capturing the subtidal sea surface height, but is better for CIOFS Fresh than Hindcast. Temperature ({numref}`Fig. {number}<fig-moorings_by_region_temp>`) is medium to well-captured in both models for the full and subtidal signals. For the subtidal anomaly, the models perform similarly to each other but none of the regions show good performance. Salinity time series ({numref}`Fig. {number}<fig-moorings_by_region_salt>`) are poorly captured across the board for both models. Skill scores are shown in the next plots for each dataset.
+
+
+```{figure} ../figures/taylor_diagrams/moorings_by_region_ssh.png
+---
+name: fig-moorings_by_region_ssh
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for sea surface height: full signal minus the mean (left) and subtidal, grouped by region of Cook Inlet, for moorings.
+```
+
+
+```{figure} ../figures/taylor_diagrams/moorings_by_region_temp.png
+---
+name: fig-moorings_by_region_temp
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for temperature: full signal (left), subtidal (center), and subtidal (right) minus the monthly mean, grouped by region of Cook Inlet, for moorings.
+```
+
+
+```{figure} ../figures/taylor_diagrams/moorings_by_region_salt.png
+---
+name: fig-moorings_by_region_salt
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for salinity: full signal (left), subtidal (center), and subtidal (right) minus the monthly mean, grouped by region of Cook Inlet, for moorings.
 ```
 
 ```{code-cell} ipython3
@@ -134,6 +219,19 @@ def return_paths(slug, source_name, model_name, key_variable, which):
     if len(stats_fnames) == 0:
         stats_fnames = sorted(paths.OUT_DIR.glob(f"{slug}_{source_name}_{key_variable}_????-??-??_????-??-??{which}.yaml"))
         has_dates = True
+        if len(stats_fnames) > 0:
+            # import pdb; pdb.set_trace() #dparser.parse(stats_fnames[0].stem, fuzzy=True)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    # message="Parsing dates involving a day of month without a y",
+                    category=DeprecationWarning,
+                )
+
+                stats_fnames = [f for f in stats_fnames if search_dates(str(f), settings={"DATE_ORDER": "YMD"})[0][1].year in years]
+        # if not station_intersect_with_years(minTime, maxTime):
+        #     # print(f"Skipping {source_name} because min time {minTime} and max time {maxTime} are not in {years}")
+        #     continue
     return stats_fnames, has_dates
 
 def load_ss(index, stats_fnames, model_name, key_variable):
@@ -152,7 +250,7 @@ model_names, key_variables = ["ciofs_hindcast","ciofs_fresh"], ["ssh","temp","sa
 whichs = ["_subtract-mean_subtidal", "_subtract-mean", "", "_subtidal_subtract-monthly-mean", "_subtidal"]
 
 dfalls = []
-all_slugs, all_times = [], []
+all_slugs, all_slug_names, all_times = [], [], []
 all_lons, all_lats = [], []
 for slug in slugs:
     cat = intake.open_catalog(cic.utils.cat_path(slug))
@@ -222,10 +320,12 @@ for slug in slugs:
             new_times = rows_for_source_name.str[-4:]
             slug_times.extend(new_times)  # grab years from names
         else:
-            new_times = [df[df["station"] == source_name]["date_time"].iloc[0][:13]]
+            # import pdb; pdb.set_trace()
+            new_times = [df[df["station"] == source_name]["start_time"].iloc[0]]
             slug_times.extend(new_times)
     
     all_slugs.extend([slug]*len(dfs_concat))
+    all_slug_names.extend([slug_names[slug]]*len(dfs_concat))
     all_times.extend(slug_times)
     for source_name, lons in slug_lons.items():
         all_lons.extend(lons)
@@ -241,22 +341,88 @@ dfall["lon"] = all_lons
 dfall["lat"] = all_lats
 # dfall["date_time"] = all_times
 dfall["slug"] = all_slugs
-dfall = dfall.reset_index().set_index(["station","lon","lat","slug"])
+dfall["slug_name"] = all_slug_names
+dfall = dfall.reset_index().set_index(["station","lon","lat","slug","slug_name"])
 # dfall = dfall.reset_index().set_index(["station","lon","lat","date_time","slug"])
 ```
 
 ```{code-cell} ipython3
 :tags: [remove-input]
 
-cmap = cmocean.cm.curl
-newcmap = cmocean.tools.crop_by_percent(cmap, 20, which='both', N=None)
+newcmap = cmocean.cm.matter
 
-inputs = dict(x="lon", y="lat", c="ss", hover_cols=["station","date_time","slug"])
-plot_kwargs = dict(geo=True, tiles=True, size=100, width=600, height=700, clim=(-1,1), cmap=newcmap,
-                  coastline="10m", xlabel="Longitude", ylabel="Latitude",
-                  fontscale=1.5)
+hovers = [("Slug", "@slug_name"),
+          ("Station", "@station"),
+          ("Start Time", "@start_time"),
+          ("End Time", "@end_time"),
+          ("Longitude", "@lon"),
+          ("Latitude", "@lat"),
+          ("SS bin", "@ss_range"),
+          ]
+hover_cols = ["slug_name", "station", "start_time", "end_time", "lon", "lat", "ss_range"]
+
+inputs = dict(x="lon", y="lat", c="ss_code", hover_cols=hover_cols, by="slug_name")
+plot_kwargs = dict(geo=True, tiles=True, size=100, width=600, height=700, clim=(0,1), cmap=newcmap,
+                #   coastline="10m", 
+                  xlabel="Longitude", ylabel="Latitude", legend="top_left",
+                  fontscale=1.25)
 
 vardescs = {"temp": "Sea temperature", "salt": "Salinity", "ssh": "Sea surface height"}
+
+
+# setup for changing colorbar from continuous to categorical
+# which saves SO MUCH MEMORY
+nbins = 11
+cat_bins = np.linspace(0,1,nbins)
+ticks = list(range(0,nbins))
+tick_labels = {i: f"{i/(nbins-1):.1f}" for i in ticks}
+
+
+opts_pts = hv.opts.Points(
+    color_levels=10,
+    clim=(0,10),
+    colorbar_opts={'ticker': FixedTicker(ticks=ticks), 'major_label_overrides': tick_labels},
+    tools=["hover"], hover_tooltips=hovers
+    )
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def plot(model_name, key_variable, which, clabel):
+    # clabel = f"Model skill scores for moorings for {vardesc}"
+    # dfallsub = dfall.loc[:,(model_names,key_variable)]
+    # dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+    # dfallsubsub = dfall.loc[:,(model_name,key_variable)].dropna().rename("ss")
+    dfallsubsub = dfall.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+    cats = pd.cut(dfallsubsub, cat_bins).to_frame()
+    cats["ss_code"] = cats["ss"].cat.codes
+    cats["ss_range"] = cats["ss"].astype(str)
+
+    # we plot the category codes but then label the colorbar correctly
+    # so we don't have to plot a continuous colorbar with many levels
+    return cats.hvplot.points(**inputs, **plot_kwargs, title=model_name.upper(), clabel=clabel, alpha=1.0).opts(opts_pts)
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def make_figures(key_variable, which, clabel):
+    figname = f"{ins_type}_{key_variable}{which}"
+    # print(figname)
+    abs_path = os.path.abspath(f"{figname}.html")
+
+    plots = []
+    for model in models:
+        plots.append(plot(model, key_variable, which, clabel))
+
+    variable_plot = plots[0] + plots[1]
+
+    if not Path(f"{figname}.png").exists():
+        hv.save(variable_plot, figname, fmt='html')
+        save_png(abs_path, figname)
+
+    return variable_plot, figname, abs_path
 ```
 
 ## Sea Surface Height
@@ -269,29 +435,43 @@ vardescs = {"temp": "Sea temperature", "salt": "Salinity", "ssh": "Sea surface h
 :tags: [remove-input]
 
 key_variable, which = "ssh", '_subtract-mean'
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings, {vardescs[key_variable].lower()}, minus mean"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+ssh_plot1, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("ssh_plot1", ssh_plot1, display=False)
 
-ssh = left + right
-glue("tidal_ssh", ssh, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings, {vardescs[key_variable].lower()}, minus mean"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                 title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# ssh = left + right
+# glue("tidal_ssh", ssh, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} tidal_ssh
+```{glue:figure} ssh_plot1
 :name: "fig-overview-moorings-tidal-ssh"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for sea surface height with mean subtracted.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for sea surface height with mean subtracted, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_ssh_subtract-mean.png
+:name: "fig-overview-moorings-tidal-ssh"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for sea surface height with mean subtracted, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -300,29 +480,43 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 ```{code-cell} ipython3
 :tags: [remove-input]
 
+# import cartopy.crs as ccrs
 key_variable, which = "ssh", '_subtract-mean_subtidal'
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings, subtidal {vardescs[key_variable].lower()}, minus mean"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
-ssh = left + right
-glue("subtidal_ssh", ssh, display=False)
+ssh2, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("ssh2", ssh2, display=False)
+
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings, subtidal {vardescs[key_variable].lower()}, minus mean"
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, crs=ccrs.PlateCarree(),
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+# ssh = left + right
+# glue("subtidal_ssh", ssh, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} subtidal_ssh
+```{glue:figure} ssh2
 :name: "fig-overview-moorings-subtidal-ssh"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal sea surface height with mean subtracted.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal sea surface height with mean subtracted, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_ssh_subtract-mean_subtidal.png
+:name: "fig-overview-moorings-subtidal-ssh"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal sea surface height with mean subtracted, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -336,29 +530,43 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 :tags: [remove-input]
 
 key_variable, which = "temp", ''
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings for {vardescs[key_variable].lower()}"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+variable_plot, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("variable_plot", variable_plot, display=False)
 
-temp = left + right
-glue("tidal_temp", temp, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings for {vardescs[key_variable].lower()}"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+                           
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# temp = left + right
+# glue("tidal_temp", temp, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} tidal_temp
+```{glue:figure} variable_plot
 :name: "fig-overview-moorings-tidal-temp"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for temperature.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for temperature, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_temp.png
+:name: "fig-overview-moorings-tidal-temp"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal sea surface height with mean subtracted, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -368,29 +576,43 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 :tags: [remove-input]
 
 key_variable, which = "temp", '_subtidal'
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()}"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+temp2, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("temp2", temp2, display=False)
 
-temp_subtidal = left + right
-glue("subtidal_temp", temp_subtidal, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()}"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# temp_subtidal = left + right
+# glue("subtidal_temp", temp_subtidal, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} subtidal_temp
+```{glue:figure} temp2
 :name: "fig-overview-moorings-subtidal-temp"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal temperature.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal temperature, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_temp_subtidal.png
+:name: "fig-overview-moorings-subtidal-temp"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal temperature, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -400,29 +622,43 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 :tags: [remove-input]
 
 key_variable, which = "temp", '_subtidal_subtract-monthly-mean'
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()} anomaly"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+temp3, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("temp3", temp3, display=False)
 
-temp = left + right
-glue("subtidal_temp_minus_clm", temp, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()} anomaly"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# temp = left + right
+# glue("subtidal_temp_minus_clm", temp, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} subtidal_temp_minus_clm
+```{glue:figure} temp3
 :name: "fig-overview-moorings-subtidal-temp-minus-clm"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal temperature anomaly.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal temperature anomaly, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_temp_subtidal_subtract-monthly-mean.png
+:name: "fig-overview-moorings-subtidal-temp"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal temperature anomaly, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -436,29 +672,44 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 :tags: [remove-input]
 
 key_variable, which = "salt", ''
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings for {vardescs[key_variable].lower()}"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+salt1, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("salt1", salt1, display=False)
 
-salt = left + right
-glue("tidal_salt", salt, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings for {vardescs[key_variable].lower()}"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+
+# salt = left + right
+# glue("tidal_salt", salt, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} tidal_salt
+```{glue:figure} salt1
 :name: "fig-overview-moorings-tidal-salt"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for salinity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for salinity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_salt.png
+:name: "fig-overview-moorings-tidal-salt"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for salinity, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -468,29 +719,44 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 :tags: [remove-input]
 
 key_variable, which = "salt", '_subtidal'
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()}"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+salt2, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("salt2", salt2, display=False)
 
-salt_subtidal = left + right
-glue("salt_subtidal", salt_subtidal, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()}"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+
+# salt_subtidal = left + right
+# glue("salt_subtidal", salt_subtidal, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} salt_subtidal
+```{glue:figure} salt2
 :name: "fig-overview-moorings-subtidal-salt"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal salinity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal salinity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_salt_subtidal.png
+:name: "fig-overview-moorings-subtidal-salt"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal salinity, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -500,26 +766,41 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with mooring
 :tags: [remove-input]
 
 key_variable, which = "salt", '_subtidal_subtract-monthly-mean'
-
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
 clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()} anomaly"
 
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].rename("ss").dropna().hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
+salt3, figname, abs_path = make_figures(key_variable, which, clabel)
+glue("salt3", salt3, display=False)
 
-salt = left + right
-glue("subtidal_salt_minus_clm", salt, display=False)
+# dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+# clabel = f"Model skill scores for moorings for subtidal {vardescs[key_variable].lower()} anomaly"
+
+# model_name = models[0]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# left = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                    title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+# model_name = models[1]
+# dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+# right = dfallsubsub.hvplot.points(**inputs, **plot_kwargs, 
+#                                     title=model_name.upper(),clabel=clabel)#.opts(opts.Points(tools=["hover"], hover_tooltips=hovers))
+
+
+# salt = left + right
+# glue("subtidal_salt_minus_clm", salt, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} subtidal_salt_minus_clm
+```{glue:figure} salt3
 :name: "fig-overview-moorings-subtidal-salt-minus-clm"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal salinity anomaly.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal salinity anomaly, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} moorings_salt_subtidal_subtract-monthly-mean.png
+:name: "fig-overview-moorings-subtidal-salt-minus-clm"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with moorings for subtidal salinity anomaly, by project. (PNG screenshot, available for PDF and for saving image.)
+```

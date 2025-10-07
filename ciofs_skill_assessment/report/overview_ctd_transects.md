@@ -13,16 +13,24 @@ kernelspec:
 
 # Overview CTD Transects
 
-In these CTD transect overview plots, each colored square marker represents a visit to the transect. The length of each transect was split into the number of visits with a square for each visit; if there were many repeat visits there are a lot of squares along a transect and only one for a single visit.
+Shown here are plots to summarize the skill of the models in representing the data. First are Taylor Diagrams summarize the overall skill of the models. Subsequently, in the next overview plots, each colored square marker represents the skill score for the model compared with the data for a visit to the transect. The length of each transect was split into the number of visits with a square for each visit; if there were many repeat visits there are a lot of squares along a transect and only one for a single visit.
 
-[244MB zipfile of plots](https://files.axds.co/ciofs_fresh/zip/ctd_transects.zip)
+Results show similar but slightly improved skill for CIOFS fresh over CIOFS Hindcast for temperature and clearly improved skill for salinity.
 
-```{code-cell}
+[226MB zipfile of plots and stats files](https://files.axds.co/ciofs_fresh/zip/ctd_transects.zip)
+
+[164MB zipfile of CTD profile plots from CTD transects](https://files.axds.co/ciofs_fresh/zip/ctd_profiles_from_transects.zip)
+
+```{code-cell} ipython3
 :tags: [remove-input]
 
 import intake
 import numpy as np
-import ocean_model_skill_assessor as omsa
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import matplotlib.pyplot as plt
+    import ocean_model_skill_assessor as omsa
 import cook_inlet_catalogs as cic
 import pandas as pd
 import xarray as xr
@@ -32,14 +40,41 @@ import yaml
 from myst_nb import glue
 import fnmatch
 from datetimerange import DateTimeRange
-import more_utils as mu
+from holoviews import opts
+from bokeh.models import FixedTicker
+import holoviews as hv
+import os
+from pathlib import Path
+import subprocess
 
+
+ins_type = "ctd_transects"  # instrument name
+models = ["ciofs_hindcast", "ciofs_fresh"]
 years = [2003, 2004, 2005, 2006, 2012, 2013, 2014]
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def save_png(abs_path, figname):
+    # Define the command and its arguments
+    cmd = [
+        "playwright",
+        "screenshot",
+        f"file://{abs_path}",
+        f"{figname}.png",
+        # "--full-page",
+        "--wait-for-timeout=30000"
+    ]
+
+    # Run the command
+    if not Path(f"{figname}.png").exists():
+        result = subprocess.run(cmd, capture_output=True, text=True)
 ```
 
 ## Map of Stations
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
 slugs = [        "ctd_transects_barabara_to_bluff_2002_2003",
@@ -93,47 +128,53 @@ line_names = {"ctd_transects_barabara_to_bluff_2002_2003": ["Barabara to Bluff (
         "ctd_transects_otf_kbnerr": ['OTF KBNERR (repeated)'],
         "ctd_transects_uaf": ['UAF (repeated)'], 
                }
+# hand-written names to label slugs with
+slug_names = {"ctd_transects_barabara_to_bluff_2002_2003": "Barabara to Bluff",
+                "ctd_transects_cmi_kbnerr": "CMI KBNERR",
+                "ctd_transects_cmi_uaf": "CMI UAF",
+        "ctd_transects_gwa": "GWA",
+        "ctd_transects_misc_2002": "Misc 2002",
+        "ctd_transects_otf_kbnerr": "OTF KBNERR",
+        "ctd_transects_uaf": "UAF",
+               }
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+import geopandas as gpd
+from shapely.geometry import LineString
 
 rows = []
 for slug in slugs:
     cat = intake.open_catalog(cic.utils.cat_path(slug))
-    for source_name, station in zip(source_names[slug], line_names[slug]):
-        # can't use min/max lon/lat because doesn't get orientation of transect correct
-        dfd = cat[source_name].read()
-        dfd = dfd.reset_index()
-        minlon, maxlon = dfd.cf["longitude"].iloc[0], dfd.cf["longitude"].iloc[-1]
-        minlat, maxlat = dfd.cf["latitude"].iloc[0], dfd.cf["latitude"].iloc[-1]
-        midlon, midlat = 0.5*(minlon + maxlon), 0.5*(minlat + maxlat)
-        if slug == "ctd_transects_cmi_kbnerr":
-            # midlon += 0.01
-            midlat += 0.03
-        elif slug == "ctd_transects_gwa":
-            midlat -= 0.025
-        elif slug == "ctd_transects_otf_kbnerr":
-            midlat -= 0.04
-        # minlon, minlat = cat[source_name].metadata["minLongitude"], cat[source_name].metadata["minLatitude"]
-        # maxlon, maxlat = cat[source_name].metadata["maxLongitude"], cat[source_name].metadata["maxLatitude"]
+    for source_name, label in zip(source_names[slug], line_names[slug]):
+        
+        dfd = cat[source_name].read().reset_index()
+        geometry = LineString(zip(dfd.cf["longitude"].iloc[[0,-1]], dfd.cf["latitude"].iloc[[0,-1]]))
         start_time = cat[source_name].metadata["minTime"]
-        rows.append([source_name, station, minlon, minlat, midlon, midlat, start_time, slug])
-        rows.append([source_name, station, maxlon, maxlat, midlon, midlat, start_time, slug])
-        rows.append([source_name, station, np.nan, np.nan, midlon, midlat, start_time, slug])
-df = pd.DataFrame(rows, columns=["source_name", "station","lon","lat","midlon","midlat","date_time", "slug"])
+        rows.append([source_name, geometry, start_time, slug, slug_names[slug], label])
+gdf = gpd.GeoDataFrame(rows, columns=["source_name","geometry","date_time", "slug", "slug_labels", "label"])
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
-pts_plot = df.hvplot.paths(x="lon", y="lat", geo=True, tiles=True,
-                                   #  # xlim=[-153, -150], ylim=[59,60], 
-                                    # hover_cols=["station","date_time","slug"],
-                                   legend=False, line_width=5, coastline=False, 
-                                    xlabel="Longitude", ylabel="Latitude", 
-                                    title="CTD Transects",
-                                    width=600, height=700)
-labels_plot = df.drop_duplicates(subset=["date_time"]).hvplot.labels(x="midlon", y="midlat", text="station", geo=True, text_alpha=0.5,
-            hover=False, text_baseline='bottom', fontscale=1.5, text_font_size='10pt', text_color="k")
+figname = f"{ins_type}_map"
+abs_path = os.path.abspath(f"{figname}.html")
 
-fmap = pts_plot * labels_plot
+fmap = gdf.hvplot.paths(x="lon", y="lat", geo=True, tiles=True,
+                                   #  # xlim=[-153, -150], ylim=[59,60], 
+                                    hover_cols=["label"],#,"date_time","slug"],
+                                    by="slug_labels", #clabel=station,
+                                   legend="top_left", line_width=6, coastline=False, 
+                                    xlabel="Longitude", ylabel="Latitude", 
+                                    title="CTD Transects", alpha=0.9,
+                                    width=600, height=700, fontscale=1.5, )
+if not Path(f"{figname}.png").exists():
+    hv.save(fmap, figname, fmt='html')
+    save_png(abs_path, figname)
+
 glue("fig_map", fmap, display=False)
 ```
 
@@ -141,11 +182,44 @@ glue("fig_map", fmap, display=False)
 ```{glue:figure} fig_map
 :name: "fig-overview-ctd-transects-map"
 
-All CTD transects (repeats indicated but not plotted).
+All CTD transects (repeats indicated but not plotted), by project. Click on a legend entry to toggle the transparency.
+
 ```
 ````
 
-```{code-cell}
++++
+
+````{div} full-width                
+```{figure} ctd_transects_map.png
+:name: "fig-overview-ctd-transects-map"
+
+All CTD transects, by project. (PNG screenshot, available for PDF and for saving image.)
+```
+````
+
++++
+
+## Taylor Diagrams
+
+Taylor diagrams summarize the skill of the two models in capturing the CTD transect datasets. The data has been grouped by region ({numref}`Fig. {number}<fig-ctd_transects_by_region>`) and season ({numref}`Fig. {number}<fig-ctd_transects_by_season>`). The results show that CIOFS fresh performs slightly better than CIOFS hindcast for temperature across different groupings, and much better for salinity. Skill scores are shown in the next plots for each dataset.
+
+
+```{figure} ../figures/taylor_diagrams/ctd_transects_by_region.png
+---
+name: fig-ctd_transects_by_region
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for temperature (left) and salinity (right), grouped by region of Cook Inlet, for CTD transects datasets.
+```
+
+
+```{figure} ../figures/taylor_diagrams/ctd_transects_by_season.png
+---
+name: fig-ctd_transects_by_season
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for temperature (left) and salinity (right), grouped by season, for CTD transects datasets.
+```
+
+```{code-cell} ipython3
 :tags: [remove-input]
 
 # hand-written globs to select transects
@@ -175,15 +249,16 @@ line_globs = {"ctd_transects_barabara_to_bluff_2002_2003": ["*"],
                }
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
 def return_paths(slug, model_name, key_variable, glob_source_names):
     # ctd_transects_barabara_to_bluff_2002_2003_Cruise 10_temp.yaml
     paths = omsa.Paths(f"{slug}_{model_name}")
     stats_fnames = []
+    # import pdb; pdb.set_trace()
     for source_name in glob_source_names:
-        stats_fnames.extend(list(paths.OUT_DIR.glob(f"*{source_name}_{key_variable}.yaml")))
+        stats_fnames.extend(list(paths.OUT_DIR.glob(f"*{source_name.replace(' ', '_')}_{key_variable}.yaml")))
     return sorted(stats_fnames)
 
 def load_ss(index, stats_fnames, model_name, key_variable):
@@ -200,7 +275,7 @@ def load_ss(index, stats_fnames, model_name, key_variable):
     return ds
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
 def station_intersect_with_years(minTime, maxTime):
@@ -215,7 +290,7 @@ def station_intersect_with_years(minTime, maxTime):
     return flag
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
 # go through every cat
@@ -223,7 +298,7 @@ def station_intersect_with_years(minTime, maxTime):
 # input them into temp dataframe tracking that
 # get end points lon/lat from original df and calculate mid points, append to list, combine at the end
 
-model_names, key_variables = mu.models, ["temp", "salt"]
+model_names, key_variables = models, ["temp", "salt"]
 vardescs = ["sea temperature", "salinity"]
 mindex = pd.MultiIndex.from_product([model_names, key_variables])
 
@@ -240,7 +315,7 @@ dfs = {}
 for model_name in model_names:
     for key_variable in key_variables:
         dfouts = []
-        all_source_names, all_slugs, all_times = [], [], []
+        all_source_names, all_slugs, all_times, all_slug_labels = [], [], [], []
         all_lons, all_lats = [], []
         for slug in slugs:
             cat = intake.open_catalog(cic.utils.cat_path(slug))
@@ -253,24 +328,28 @@ for model_name in model_names:
                     # print(f"Skipping {source_name} because min time {minTime} and max time {maxTime} are not in {years}")
                     skip_source_names.append(source_name)
                     continue
-            
+
             for lglob in line_globs[slug]:
                 
+                # import pdb; pdb.set_trace()
                 glob_source_names = fnmatch.filter(source_names,lglob)  # these are the source names for this part of dataframe
                 # skip_source_names
                 glob_source_names = sorted(list(set(glob_source_names) - set(skip_source_names)))
                 all_source_names.extend(glob_source_names)
                 all_slugs.extend([slug]*len(glob_source_names))
+                all_slug_labels.extend([slug_names[slug]]*len(glob_source_names))
                 all_times.extend([cat[source_name].metadata["minTime"][:13] for source_name in glob_source_names])
                 stats_fnames = return_paths(slug, model_name, key_variable, glob_source_names)
                 # stats_fnames = return_paths(slug, model_name, key_variable, lglob)
                 # import pdb; pdb.set_trace()
+                glob_source_names = [source_name.replace(" ", "_") for source_name in glob_source_names]
                 dfouttemp = load_ss(glob_source_names, stats_fnames, model_name, key_variable)
                 
-                whichrows = fnmatch.filter(df[df["slug"] == slug]["source_name"],lglob)
-                
-                lon_endpoints = df[df["source_name"].isin(whichrows)]["lon"].dropna().to_list()
-                lat_endpoints = df[df["source_name"].isin(whichrows)]["lat"].dropna().to_list()
+                whichrows = fnmatch.filter(gdf[gdf["slug"] == slug]["source_name"],lglob)
+                # import pdb; pdb.set_trace()
+                lon_endpoints, lat_endpoints = list(zip(*(gdf[gdf["source_name"].isin(whichrows)]["geometry"].values[0].coords)))
+                # lon_endpoints = gdf[gdf["source_name"].isin(whichrows)]["lon"].dropna().to_list()
+                # lat_endpoints = gdf[gdf["source_name"].isin(whichrows)]["lat"].dropna().to_list()
                 lons = np.linspace(*lon_endpoints, len(glob_source_names))
                 lats = np.linspace(*lat_endpoints, len(glob_source_names))
 
@@ -290,85 +369,147 @@ for model_name in model_names:
 data = pd.concat(dfs, axis=1).values
 dfall = pd.DataFrame(data, index=all_source_names, columns=mindex)
 dfall.index.name = "source_name"
+dfall.index = dfall.index.astype("string")  # ensure index is string type
 dfall["lon"] = all_lons
 dfall["lat"] = all_lats
-dfall["date_time"] = all_times
+dfall["date_time"] = pd.to_datetime(all_times)
 dfall["slug"] = all_slugs
-dfall = dfall.reset_index().set_index(["source_name","lon","lat","date_time","slug"])
+dfall["slug_label"] = all_slug_labels
+dfall["slug_label"] = dfall["slug_label"].astype("category")
+dfall = dfall.reset_index().set_index(["source_name","lon","lat","date_time","slug", "slug_label"])
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
-cmap = cmocean.cm.curl
-newcmap = cmocean.tools.crop_by_percent(cmap, 20, which='both', N=None)
+newcmap = cmocean.cm.matter
 
-inputs = dict(x="lon", y="lat", c="ss", hover_cols=["source_name","date_time","slug"])
-plot_kwargs = dict(geo=True, tiles=True, size=50, width=600, height=700, clim=(-1,1), cmap=newcmap,
-                  coastline="10m", xlabel="Longitude", ylabel="Latitude",
+hovers = [("Slug", "@slug_label"),
+          ("Station", "@source_name"),
+          ("Time", "@date_time"),
+          ("Longitude", "@lon"),
+          ("Latitude", "@lat"),
+          ("SS bin", "@ss_range"),
+          ]
+hover_cols = ["slug_label", "source_name", "date_time", "lon", "lat", "ss_range"]
+
+# inputs = dict(x="lon", y="lat", c="ss", hover=False)# hover_cols=hover_cols)
+inputs = dict(x="lon", y="lat", c="ss_code", hover_cols=hover_cols)
+plot_kwargs = dict(geo=True, tiles=True, size=50, width=600, height=700, clim=(0,1), cmap=newcmap,
+                  coastline=False, xlabel="Longitude", ylabel="Latitude", by="slug_label", legend="top_left",
                   fontscale=1.5, marker='s')
+
+
+# setup for changing colorbar from continuous to categorical
+# which saves SO MUCH MEMORY
+nbins = 11
+cat_bins = np.linspace(0,1,nbins)
+ticks = list(range(0,nbins))
+tick_labels = {i: f"{i/(nbins-1):.1f}" for i in ticks}
+
+
+opts_pts = hv.opts.Points(
+    color_levels=10,
+    clim=(0,10),
+    colorbar_opts={'ticker': FixedTicker(ticks=ticks), 'major_label_overrides': tick_labels},
+    tools=["hover"], hover_tooltips=hovers
+    )
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def plot(model_name, key_variable, vardesc):
+    clabel = f"Model skill scores for CTD transects for {vardesc}"
+    # dfallsub = dfall.loc[:,(model_names,key_variable)]
+    dfallsubsub = dfall.loc[:,(model_name,key_variable)].dropna().rename("ss")
+    cats = pd.cut(dfallsubsub, cat_bins).to_frame()
+    cats["ss_code"] = cats["ss"].cat.codes
+    cats["ss_range"] = cats["ss"].astype(str)
+
+    # we plot the category codes but then label the colorbar correctly
+    # so we don't have to plot a continuous colorbar with many levels
+    return cats.hvplot.points(**inputs, **plot_kwargs, title=model_name.upper(), clabel=clabel).opts(opts_pts)
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def make_figures(key_variable, vardesc):
+    figname = f"{ins_type}_{key_variable}"
+    abs_path = os.path.abspath(f"{figname}.html")
+
+    plots = []
+    for model in models:
+        plots.append(plot(model, key_variable, vardesc))
+
+    variable_plot = plots[0] + plots[1]
+
+    if not Path(f"{figname}.png").exists():
+        hv.save(variable_plot, figname, fmt='html')
+        save_png(abs_path, figname)
+
+    return variable_plot, figname, abs_path
 ```
 
 ## Sea Temperature
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
+
+
+
 
 ivar = 0
 key_variable, vardesc = key_variables[ivar], vardescs[ivar]
 
-dfallsub = dfall.loc[:,(model_names,key_variable)]
-clabel = f"Model skill scores for CTD transects for {vardesc}"
 
-model_name = model_names[0]
-left = dfallsub.loc[:,(model_name,key_variable)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = model_names[1]
-right = dfallsub.loc[:,(model_name,key_variable)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
-
-plot = left + right
-glue("temp", plot, display=False)
+temp, figname, abs_path = make_figures(key_variable, vardesc)
+glue("temp", temp, display=False)
 ```
 
 ````{div} full-width   
 ```{glue:figure} temp
 :name: "fig-overview-ctd-transects-temp"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with CTD transects for sea temperature.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with CTD transects for sea temperature, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
 
 +++
 
+```{figure} ctd_transects_temp.png
+:name: "fig-overview-ctd-transects-temp"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with CTD transects for sea temperature, by project. (PNG screenshot, available for PDF and for saving image.)
+```
+
++++
+
 ## Salinity
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-input]
 
 ivar = 1
 key_variable, vardesc = key_variables[ivar], vardescs[ivar]
 
-dfallsub = dfall.loc[:,(model_names,key_variable)]
-clabel = f"Model skill scores for CTD transects for {vardesc}"
-
-model_name = model_names[0]
-left = dfallsub.loc[:,(model_name,key_variable)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = model_names[1]
-right = dfallsub.loc[:,(model_name,key_variable)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
-
-plot = left + right
-glue("salt", plot, display=False)
+salt, figname, abs_path = make_figures(key_variable, vardesc)
+glue("salt", salt, display=False)
 ```
 
 ````{div} full-width   
 ```{glue:figure} salt
 :name: "fig-overview-ctd-transects-salt"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with CTD transects for salinity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with CTD transects for salinity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} ctd_transects_salt.png
+:name: "fig-overview-ctd-transects-salt"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with CTD transects for salinity, by project. (PNG screenshot, available for PDF and for saving image.)
+```

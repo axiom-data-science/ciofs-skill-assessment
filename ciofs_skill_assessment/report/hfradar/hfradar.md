@@ -26,12 +26,22 @@ import cook_inlet_catalogs as cic
 
 See the full dataset page for more information: {ref}`page:hfradar`
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
+
 ```{code-cell}
 :tags: [remove-input]
 
 cat = intake.open_catalog(cic.utils.cat_path("hfradar"))
 dd, ddlabels = cic.utils.combine_datasets_for_map(cat)
-dd.hvplot(**cat.metadata["map"]) * ddlabels.hvplot(**cat.metadata["maplabels"])
+map = cat.metadata["map"]
+maplabels = cat.metadata["maplabels"]
+imatches = dd["station"].str.fullmatch("|".join(['lower-ci_system-B_2006-2007', 'upper-ci_system-A_2002-2003', 'upper-ci_system-A_2009']))
+dduse = dd.loc[imatches]
+ddlabelsuse = ddlabels.loc[imatches].copy()
+ddlabelsuse["Station names"] = ['Lower Cook Inlet System B (2006-2007)', 'Upper Cook Inlet System A (2002-2003)', 'Upper Cook Inlet System A (2009)']
+maplabels = cat.metadata["maplabels"].copy()
+maplabels["text"] = "Station names"
+dduse.hvplot(**cat.metadata["map"]) * ddlabelsuse.hvplot(**maplabels)
 ```
 
 ## lower-ci_system-B_2006

@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: ciofs-skill-assessment
+  display_name: ciofs-freshwater-report
   language: python
   name: python3
 ---
@@ -14,14 +14,22 @@ kernelspec:
 (page:overview_adcp)=
 # Overview ADCP Data
 
-[60MB zipfile of plots](https://files.axds.co/ciofs_fresh/zip/adcp.zip)
+Comparisons between each model and ADCP datasets are shown below, first in Taylor diagrams, then in maps of skill scores where each marker is colored to indicate the skill score of the comparison. 
+
+The two models perform similarly to each other with the exception of increased variance in CIOFS Fresh for subtidal variable comparisons. They both generally perform well for tidal time series and only moderately well for subtidal time series.
+
+[77MB zipfile of plots and stats files](https://files.axds.co/ciofs_fresh/zip/adcp.zip)
 
 ```{code-cell} ipython3
 :tags: [remove-input]
 
 import intake
 import numpy as np
-import ocean_model_skill_assessor as omsa
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import matplotlib.pyplot as plt
+    import ocean_model_skill_assessor as omsa
 import cook_inlet_catalogs as cic
 import pandas as pd
 import xarray as xr
@@ -30,9 +38,57 @@ import cmocean
 import yaml
 from myst_nb import glue
 from datetimerange import DateTimeRange
-import more_utils as mu
+from holoviews import opts
+from bokeh.models import FixedTicker
+import holoviews as hv
+import os
+from pathlib import Path
+import subprocess
+from IPython.display import display, Markdown
 
+
+ins_type = "adcp"  # instrument name
+models = ["ciofs_hindcast", "ciofs_fresh"]
 years = [2003, 2004, 2005, 2006, 2012, 2013, 2014]
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def save_png(abs_path, figname):
+    # Define the command and its arguments
+    cmd = [
+        "playwright",
+        "screenshot",
+        f"file://{abs_path}",
+        f"{figname}.png",
+        # "--full-page",
+        "--wait-for-timeout=30000"
+    ]
+
+    # Run the command
+    if not Path(f"{figname}.png").exists():
+        result = subprocess.run(cmd, capture_output=True, text=True)
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def make_figures(key_variable, which):
+    figname = f"{ins_type}_{which}_{key_variable}"
+    abs_path = os.path.abspath(f"{figname}.html")
+
+    plots = []
+    for model in models:
+        plots.append(plot(dfall, model, key_variable, which))
+
+    variable_plot = plots[0] + plots[1]
+
+    if not Path(f"{figname}.png").exists():
+        hv.save(variable_plot, figname, fmt='html')
+        save_png(abs_path, figname)
+
+    return variable_plot, figname, abs_path
 ```
 
 ## Map of Stations
@@ -58,12 +114,17 @@ def station_intersect_with_years(minTime, maxTime):
 slugs = ["adcp_moored_noaa_coi_2005",
         "adcp_moored_noaa_coi_other",
         ]
+slug_names = {
+    "adcp_moored_noaa_coi_2005": "NOAA COI 2005",
+    "adcp_moored_noaa_coi_other": "NOAA COI Other",
+}
 rows = []
 source_names_present = {}
 for slug in slugs:
     cat = intake.open_catalog(cic.utils.cat_path(slug))
+    source_names = [sn for sn in list(cat) if sn not in ["COI0301","COI0303"]]
     source_names_present[slug] = []
-    for source_name in list(cat):
+    for source_name in source_names:
         lon, lat = cat[source_name].metadata["minLongitude"], cat[source_name].metadata["minLatitude"]
         start_time = cat[source_name].metadata["minTime"]
         minTime, maxTime = pd.Timestamp(cat[source_name].metadata["minTime"].replace("Z","")), pd.Timestamp(cat[source_name].metadata["maxTime"].replace("Z",""))
@@ -72,44 +133,118 @@ for slug in slugs:
             continue
         # print(f"Adding {source_name} because min time {minTime} and max time {maxTime} are in {years}")
         source_names_present[slug].append(source_name)
-        rows.append([source_name, lon, lat, start_time, slug])
-df = pd.DataFrame(rows, columns=["station","lon","lat","date_time", "slug"])
+        rows.append([source_name, lon, lat, start_time, slug, slug_names[slug]])
+df = pd.DataFrame(rows, columns=["station","lon","lat","start_time", "slug", "slug_name"])
 ```
-
-```{code-cell} ipython3
-:tags: [remove-input, full-width]
-
-pts_plot = df.hvplot.points(x="lon", y="lat", color="k",
-                legend=False, geo=True, tiles=True, size=35, hover_cols=["station","date_time","slug"],
-                coastline=False, xlabel="Longitude", ylabel="Latitude", title="ADCP Moorings",
-                width=600, height=700, marker="o")
-labels_plot = df.hvplot.labels(x="lon", y="lat", text="station", geo=True, text_alpha=0.5,
-            hover=False, text_baseline='bottom', fontscale=1.5, text_font_size='10pt', text_color="k")
-
-fmap = pts_plot * labels_plot
-glue("fig_map", fmap, display=False)
-```
-
-````{div} full-width   
-```{glue:figure} fig_map
-:name: "fig-overview-adcp-map"
-
-All ADCP deployments.
-```
-````
 
 ```{code-cell} ipython3
 :tags: [remove-input]
 
-def return_paths(slug, model_name, key_variable, which):
+figname = f"{ins_type}_map"
+abs_path = os.path.abspath(f"{figname}.html")
+
+fmap = df.hvplot.points(x="lon", y="lat", by="slug_name",
+                legend="top_left", geo=True, tiles=True, size=50, hover_cols=["station","start_time"],
+                xlabel="Longitude", ylabel="Latitude", title="ADCP Moorings",
+                width=600, height=700, marker="o", fontscale=1.5,)# coastline="10m")
+if not Path(f"{figname}.png").exists():
+    hv.save(fmap, figname, fmt='html')
+    save_png(abs_path, figname)
+glue("fig_map", fmap, display=False)
+```
+
+```{glue:figure} fig_map
+:name: "fig-overview-adcp-map"
+
+All ADCP deployments, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
+```
+
++++
+
+````{div} full-width                
+```{figure} adcp_map.png
+:name: "fig-overview-adcp-map"
+
+All ADCP deployments, by project. (PNG screenshot, available for PDF and for saving image.)
+```
+````
+
++++
+
+## Taylor Diagrams
+
+Taylor diagrams summarize the skill of the two models in capturing the ADCP moorings. The data has been grouped by region (Figs. {numref}`{number}<fig-adcp_moored_by_region_east>`, {numref}`{number}<fig-adcp_moored_by_region_north>`, {numref}`{number}<fig-adcp_moored_by_region_speed>`) and season (Figs. {numref}`{number}<fig-adcp_moored_by_season_east>`, {numref}`{number}<fig-adcp_moored_by_season_north>`, {numref}`{number}<fig-adcp_moored_by_season_speed>`). The results show that CIOFS fresh and CIOFS hindcast perform similarly for tidal results. For the subtidal along-channel velocity component by region, CIOFS Hindcast and CIOFS Fresh have mostly similar correlation coefficients, but CIOFS Fresh has more accurate variance. By season, CIOFS Fresh has more accurate variance again though in the spring both models have too high of variance. For the across-channel subtidal component, the two models again have similar correlation coefficients but CIOFS Fresh has more accurate variance in Upper Cook Inlet; in Kachemak Bay and Central Cook Inlet CIOFS Hindcast is more accurate. When considering subtidal speed, we see that the two models perform similarly to each other. Skill scores are shown in the next plots for each dataset.
+
+
+```{figure} ../figures/taylor_diagrams/adcp_moored_by_region_east.png
+---
+name: fig-adcp_moored_by_region_east
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for the along-channel component of velocity with tides (left) and subtidal (right), grouped by region of Cook Inlet, for moored ADCP datasets.
+```
+
+```{figure} ../figures/taylor_diagrams/adcp_moored_by_region_north.png
+---
+name: fig-adcp_moored_by_region_north
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for the across-channel component of velocity with tides (left) and subtidal (right), grouped by region of Cook Inlet, for moored ADCP datasets.
+```
+
+```{figure} ../figures/taylor_diagrams/adcp_moored_by_region_speed.png
+---
+name: fig-adcp_moored_by_region_speed
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for the magnitude of velocity with tides (left) and subtidal (right), grouped by region of Cook Inlet, for moored ADCP datasets.
+```
+
+```{figure} ../figures/taylor_diagrams/adcp_moored_by_season_east.png
+---
+name: fig-adcp_moored_by_season_east
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for the along-channel component of velocity with tides (left) and subtidal (right), grouped by season, for moored ADCP datasets.
+```
+
+```{figure} ../figures/taylor_diagrams/adcp_moored_by_season_north.png
+---
+name: fig-adcp_moored_by_season_north
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for the across-channel component of velocity with tides (left) and subtidal (right), grouped by season, for moored ADCP datasets.
+```
+
+```{figure} ../figures/taylor_diagrams/adcp_moored_by_season_speed.png
+---
+name: fig-adcp_moored_by_season_speed
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for the magnitude of velocity with tides (left) and subtidal (right), grouped by season, for moored ADCP datasets.
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def return_paths(slug, model_name, key_variable, which, stations_this_slug):
     paths = omsa.Paths(f"{slug}_{model_name}")
+    # import pdb; pdb.set_trace()
+    
     if which == "tidal":
-        stats_fnames = sorted(paths.OUT_DIR.glob(f"*{key_variable}.yaml"))
+        which_str = ""
     elif which == "subtidal":
-        stats_fnames = sorted(paths.OUT_DIR.glob(f"*{key_variable}_{which}.yaml"))
+        which_str = "_subtidal"
+
+    stats_fnames = []
+    for station in stations_this_slug:
+        stats_fnames.extend(sorted(paths.OUT_DIR.glob(f"{slug}_{station}_{key_variable}{which_str}.yaml")))
+
+    # if which == "tidal":
+    #     stats_fnames = sorted(paths.OUT_DIR.glob(f"*{key_variable}.yaml"))
+    # elif which == "subtidal":
+    #     stats_fnames = sorted(paths.OUT_DIR.glob(f"*{key_variable}_{which}.yaml"))
+    # if slug == "adcp_moored_noaa_coi_other":
+    #     import pdb; pdb.set_trace()
+    stats_fnames = [name for name in stats_fnames if "COI0301" not in str(name) and "COI0303" not in str(name)]
     return stats_fnames
 
 def load_ss(index, stats_fnames, model_name, key_variable):
+    # print(len(index), len(stats_fnames))
     ds = pd.Series(index=index, dtype=float)
     for stats_fname in stats_fnames:
         with open(stats_fname, "r") as stream:
@@ -127,7 +262,7 @@ def load_ss(index, stats_fnames, model_name, key_variable):
 ```{code-cell} ipython3
 :tags: [remove-input]
 
-model_names, key_variables, whichs = mu.models, ["speed","along","across"], ["tidal","subtidal"]
+model_names, key_variables, whichs = models, ["speed_rotate","east_rotate","north_rotate"], ["tidal","subtidal"]
 
 dfalls = []
 for slug in slugs:
@@ -136,28 +271,78 @@ for slug in slugs:
     for model_name in model_names:
         for key_variable in key_variables:
             for which in whichs:
-                stats_fnames = return_paths(slug, model_name, key_variable, which)
+                stats_fnames = return_paths(slug, model_name, key_variable, which, stations_this_slug)
+                # if len(stations_this_slug) != len(stats_fnames):
+                #     import pdb; pdb.set_trace()
                 dfout = load_ss(stations_this_slug, stats_fnames, model_name, key_variable)
                 dfs[f"{model_name}_{key_variable}_{which}"] = dfout
     mindex = pd.MultiIndex.from_product([model_names, key_variables, whichs])
     data = pd.concat(dfs, axis=1).values
+    # print(model_name, slug)
+    # if slug == "adcp_moored_noaa_coi_other":
+    #     import pdb; pdb.set_trace()
     dfalltemp = pd.DataFrame(data, index=stations_this_slug, columns=mindex)
     dfalls.append(dfalltemp)
 dfall = pd.concat(dfalls, axis=0)
-dfall[["lon","lat","date_time","slug"]] = df.set_index("station")[["lon","lat","date_time","slug"]]
-dfall = dfall.reset_index().set_index(["station","lon","lat","date_time","slug"])
+inds = ["lon","lat","start_time","slug", "slug_name"]
+dfall[inds] = df.set_index("station")[inds]
+dfall = dfall.reset_index().set_index(["station",*inds])
 ```
 
 ```{code-cell} ipython3
 :tags: [remove-input]
 
-cmap = cmocean.cm.curl
-newcmap = cmocean.tools.crop_by_percent(cmap, 20, which='both', N=None)
+newcmap = cmocean.cm.matter
 
-inputs = dict(x="lon", y="lat", c="ss", hover_cols=["station","date_time","slug"])
-plot_kwargs = dict(geo=True, tiles=True, size=200, width=600, height=700, clim=(-1,1), cmap=newcmap,
-                  coastline="10m", xlabel="Longitude", ylabel="Latitude",
+hovers = [("Slug", "@slug_name"),
+          ("Station", "@station"),
+          ("Start Time", "@start_time"),
+          ("Longitude", "@lon"),
+          ("Latitude", "@lat"),
+          ("SS bin", "@ss_range"),
+          ]
+hover_cols = ["slug_name", "station", "start_time", "lon", "lat", "ss_range"]
+
+
+# inputs = dict(x="lon", y="lat", c="ss", by="slug_name", hover=False)
+inputs = dict(x="lon", y="lat", c="ss_code", hover_cols=hover_cols, by="slug_name")
+# inputs = dict(x="lon", y="lat", c="ss_code", hover=True, by="slug_name")
+plot_kwargs = dict(geo=True, tiles=True, size=100, width=600, height=700, clim=(0,1), cmap=newcmap,
+                #   coastline="10m", 
+                  xlabel="Longitude", ylabel="Latitude", legend="top_left",
                   fontscale=1.5)
+
+
+# setup for changing colorbar from continuous to categorical
+# which saves SO MUCH MEMORY
+nbins = 11
+cat_bins = np.linspace(0,1,nbins)
+ticks = list(range(0,nbins))
+tick_labels = {i: f"{i/(nbins-1):.1f}" for i in ticks}
+
+
+opts_pts = hv.opts.Points(
+    color_levels=10,
+    clim=(0,10),
+    colorbar_opts={'ticker': FixedTicker(ticks=ticks), 'major_label_overrides': tick_labels},
+    tools=["hover"], hover_tooltips=hovers
+    )
+```
+
+```{code-cell} ipython3
+:tags: [remove-input]
+
+def plot(dfall, model_name, key_variable, which):
+    clabel = f"Model skill scores for ADCP moorings for {key_variable.lower()}"
+    dfallsub = dfall.loc[:,(model_names,key_variable,which)]
+    dfallsubsub = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss")
+    cats = pd.cut(dfallsubsub, cat_bins).to_frame()
+    cats["ss_code"] = cats["ss"].cat.codes
+    cats["ss_range"] = cats["ss"].astype(str)
+
+    # we plot the category codes but then label the colorbar correctly
+    # so we don't have to plot a continuous colorbar with many levels
+    return cats.hvplot.points(**inputs, **plot_kwargs, title=model_name.upper(), clabel=clabel).opts(opts_pts)
 ```
 
 ## Tidal
@@ -167,32 +352,29 @@ plot_kwargs = dict(geo=True, tiles=True, size=200, width=600, height=700, clim=(
 ### Horizontal Speed
 
 ```{code-cell} ipython3
-:tags: [full-width, remove-input]
+:tags: [remove-input, remove-output]
 
-key_variable, which = "speed", "tidal"
+key_variable, which = "speed_rotate", "tidal"
 
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
-clabel = f"Model skill scores for ADCP moorings for {key_variable.lower()}"
-
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(),clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),clabel=clabel)
-
-tidal_speed = left + right
-glue("tidal_speed", tidal_speed, display=False)
+speed1, figname, abs_path = make_figures(key_variable, which)
+glue("speed1", speed1, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} tidal_speed
+```{glue:figure} speed1
 :name: "fig-overview-adcp-tidal-speed"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for horizontal speed.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for horizontal speed, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} adcp_tidal_speed_rotate.png
+:name: "fig-overview-adcp-tidal-speed"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for horizontal speed, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++ {"tags": ["full-width"]}
 
@@ -201,30 +383,27 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP mo
 ```{code-cell} ipython3
 :tags: [full-width, remove-input]
 
-key_variable, which = "along", "tidal"
+key_variable, which = "east_rotate", "tidal"
 
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
-clabel = f"Model skill scores for ADCP moorings for {key_variable.lower()}"
-
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(), clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(), clabel=clabel)
-
-tidal_along = left + right
-glue("tidal_along", tidal_along, display=False)
+along1, figname, abs_path = make_figures(key_variable, which)
+glue("along1", along1, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} tidal_along
+```{glue:figure} along1
 :name: "fig-overview-adcp-tidal-along"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for along-channel velocity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for along-channel velocity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} adcp_tidal_east_rotate.png
+:name: "fig-overview-adcp-tidal-along"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for along-channel velocity, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -233,30 +412,27 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP mo
 ```{code-cell} ipython3
 :tags: [full-width, remove-input]
 
-key_variable, which = "across", "tidal"
+key_variable, which = "north_rotate", "tidal"
 
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
-clabel = f"Model skill scores for ADCP moorings for {key_variable.lower()}"
-
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(), clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(),  clabel=clabel)
-
-tidal_across = left + right
-glue("tidal_across", tidal_across, display=False)
+across1, figname, abs_path = make_figures(key_variable, which)
+glue("across1", across1, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} tidal_across
+```{glue:figure} across1
 :name: "fig-overview-adcp-tidal-across"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for across-channel velocity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for across-channel velocity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} adcp_tidal_north_rotate.png
+:name: "fig-overview-adcp-tidal-across"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for across-channel velocity, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -269,30 +445,27 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP mo
 ```{code-cell} ipython3
 :tags: [full-width, remove-input]
 
-key_variable, which = "speed", "subtidal"
+key_variable, which = "speed_rotate", "subtidal"
 
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
-clabel = f"Model skill scores for ADCP moorings for {which} {key_variable.lower()}"
-
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(), clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(), clabel=clabel)
-
-subtidal_speed = left + right
-glue("subtidal_speed", subtidal_speed, display=False)
+speed2, figname, abs_path = make_figures(key_variable, which)
+glue("speed2", speed2, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} subtidal_speed
+```{glue:figure} speed2
 :name: "fig-overview-adcp-subtidal-speed"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal horizontal speed.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal horizontal speed, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} adcp_subtidal_speed_rotate.png
+:name: "fig-overview-adcp-subtidal-speed"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal horizontal speed, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -301,30 +474,27 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP mo
 ```{code-cell} ipython3
 :tags: [full-width, remove-input]
 
-key_variable, which = "along", "subtidal"
+key_variable, which = "east_rotate", "subtidal"
 
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
-clabel = f"Model skill scores for ADCP moorings for {which} {key_variable.lower()}"
-
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(), clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(), clabel=clabel)
-
-subtidal_along = left + right
-glue("subtidal_along", subtidal_along, display=False)
+along2, figname, abs_path = make_figures(key_variable, which)
+glue("along2", along2, display=False)
 ```
 
 ````{div} full-width   
-```{glue:figure} subtidal_along
+```{glue:figure} along2
 :name: "fig-overview-adcp-subtidal-along"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal along-channel velocity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal along-channel velocity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} adcp_subtidal_east_rotate.png
+:name: "fig-overview-adcp-subtidal-east"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal along-channel velocity, by project. (PNG screenshot, available for PDF and for saving image.)
+```
 
 +++
 
@@ -333,27 +503,26 @@ Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP mo
 ```{code-cell} ipython3
 :tags: [full-width, remove-input]
 
-key_variable, which = "across", "subtidal"
+key_variable, which = "north_rotate", "subtidal"
 
-dfallsub = dfall.loc[:,(model_names,key_variable,which)]
-clabel = f"Model skill scores for ADCP moorings for {which} {key_variable.lower()}"
-
-model_name = mu.models[0]
-left = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                  title=model_name.upper(), clabel=clabel)
-                           
-model_name = mu.models[1]
-right = dfallsub.loc[:,(model_name,key_variable,which)].dropna().rename("ss").hvplot.points(**inputs, **plot_kwargs, 
-                                                                                   title=model_name.upper(), clabel=clabel)
-
-subtidal_across = left + right
-glue("subtidal_across", subtidal_across, display=False)
+across2, figname, abs_path = make_figures(key_variable, which)
+glue("across2", across2, display=False)
 ```
+
++++ {"tags": ["remove-input", "remove-output"]}
 
 ````{div} full-width   
-```{glue:figure} subtidal_across
+```{glue:figure} across2
 :name: "fig-overview-adcp-subtidal-across"
 
-Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal across-channel velocity.
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal across-channel velocity, by project. Click on a legend entry to toggle the transparency. (HTML plot, won't show up correctly in PDF.)
 ```
 ````
+
++++
+
+```{figure} adcp_subtidal_north_rotate.png
+:name: "fig-overview-adcp-subtidal-north"
+
+Skill scores for CIOFS Hindcast (left) and CIOFS Freshwater (right) with ADCP moorings for subtidal across-channel velocity, by project. (PNG screenshot, available for PDF and for saving image.)
+```

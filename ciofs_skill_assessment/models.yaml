@@ -2,27 +2,27 @@ aliases:
   ciofs_fresh: ciofs_fresh
   ciofs_hindcast: ciofs_hindcast
 data:
-  1ab6285d784ff4e2:
+  e82d3db468e8ea2d:
     datatype: intake.readers.datatypes:HDF5
     kwargs:
       path: ''
       storage_options: null
-      url: /mnt/vault/ciofs/HINDCAST/ciofs_kerchunk.parq
+      url: /home/kristen/projects/kerchunk_setup/ciofs_hindcast_kerchunk.parquet
     metadata: {}
     user_parameters: {}
-  51c17e548252dc14:
+  fc274f0a706db3ed:
     datatype: intake.readers.datatypes:HDF5
     kwargs:
       path: ''
       storage_options: null
-      url: /home/kristen/projects/kerchunk_setup/ciofs_fresh_kerchunk.parq
+      url: /home/kristen/projects/kerchunk_setup/ciofs_fresh_kerchunk.parquet
     metadata: {}
     user_parameters: {}
 entries:
   ciofs_fresh:
     kwargs:
       chunks: {}
-      data: '{data(51c17e548252dc14)}'
+      data: '{data(fc274f0a706db3ed)}'
       engine: kerchunk
     metadata: {}
     output_instance: xarray:Dataset
@@ -31,7 +31,7 @@ entries:
   ciofs_hindcast:
     kwargs:
       chunks: {}
-      data: '{data(1ab6285d784ff4e2)}'
+      data: '{data(e82d3db468e8ea2d)}'
       engine: kerchunk
     metadata: {}
     output_instance: xarray:Dataset

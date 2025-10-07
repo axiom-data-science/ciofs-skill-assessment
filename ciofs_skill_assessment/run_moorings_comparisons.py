@@ -25,7 +25,7 @@ slugs = [
         # "moorings_kbnerr_bear_cove_seldovia", 
         # "moorings_kbnerr_historical",  # 
         # "moorings_kbnerr_homer",
-        # "moorings_noaa",    
+        "moorings_noaa",    
         "moorings_uaf",  
          ]
 
@@ -33,11 +33,11 @@ slugs = [
 # note that I ended up copying cached files for "ciofs_hindcast" from
 # previous project instead of running this script
 
-time_range = ["2012-1-1","2015-1-1"]
-# time_range = ["2003-1-1","2007-1-1"] 
+# time_range = ["2012-1-1","2015-1-1"]
+time_range = ["2003-1-1","2007-1-1"] 
 
 # models = ["ciofs_fresh"]
-models = ["ciofs_hindcast"]
+models = ["ciofs_hindcast", "ciofs_fresh"]
 
 # for depth index need these to have model depths to choose index
 # need_xgcm_grid=True,
@@ -97,7 +97,7 @@ for slug in slugs:
 
     source_names = list(cat)
 
-    for source_name in ["uaf_ocean_acidification_resea_ko"]:#source_names:
+    for source_name in source_names:
 
         for model in models:
             
@@ -213,7 +213,8 @@ for slug in slugs:
                              plot_count_title=False,
                              vocab_labels="vocab_labels",
                               kwargs_plot=kwargs_plot,
-                         override_processed=True,
+                              known_model_depth_attr_positive="up",
+                         override_processed=False,
                          override_stats=True,
                          override_plot=True,
                              )

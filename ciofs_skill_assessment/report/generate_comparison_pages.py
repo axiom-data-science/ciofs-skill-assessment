@@ -23,6 +23,92 @@ key_variables = ["ssh", "temp", "salt", "along", "across", "speed"]
 
 years = [2003, 2004, 2005, 2006, 2012, 2013, 2014]
 
+## For CTD transects
+# hand-selected source names to use since often repeated
+source_names = {"ctd_transects_barabara_to_bluff_2002_2003": ["Cruise 1"],
+                "ctd_transects_cmi_kbnerr": ["Cruise_14-Line_1",
+                                             "Cruise_14-Line_2",
+                                             "Cruise_14-Line_3",
+                                             "Cruise_14-Line_4",
+                                             "Cruise_14-Line_6",
+                                             "Cruise_14-Line_7",
+                                            "sue_shelikof"],
+                "ctd_transects_cmi_uaf": ["Cruise-01"],
+        "ctd_transects_gwa": ['transect_3-2012-05-02',
+                              'transect_4-2012-05-02',
+                              'transect_6-2012-05-03',
+                              'transect_7-2012-07-30',
+                              'transect_9-2012-02-14',
+                              'transect_AlongBay-2012-08-15',], 
+        "ctd_transects_otf_kbnerr": ['2003-07-01'],
+        "ctd_transects_uaf": ['Transect_01'], 
+        "hfradar": ['lower-ci_system-B_2006-2007', 'upper-ci_system-A_2002-2003', 'upper-ci_system-A_2009']
+               }
+
+# hand-written names to label with
+line_names = {"ctd_transects_barabara_to_bluff_2002_2003": ["Barabara to Bluff (repeated)"],
+                "ctd_transects_cmi_kbnerr": ["CMI KBNERR: Line 1 (repeated)",
+                                             "CMI KBNERR: Line 2 (repeated)",
+                                             "CMI KBNERR: Line 3 (repeated)",
+                                             "CMI KBNERR: Line 4 (repeated)",
+                                             "CMI KBNERR: Line 6 (repeated)",
+                                             "CMI KBNERR: Line 7 (repeated)",
+                                            "CMI KBNERR: Sue Shelikof"],
+                "ctd_transects_cmi_uaf": ["CMI UAF (repeated)"],
+        "ctd_transects_gwa": ['GWA: Transect 3 (repeated)',
+                              'GWA: Transect 4 (repeated)',
+                              'GWA: Transect 6 (repeated)',
+                              'GWA: Transect 7 (repeated)',
+                              'GWA: Transect 9 (repeated)',
+                              'GWA: Transect AlongBay (repeated)',], 
+        "ctd_transects_misc_2002": ['Bear Jul 02',
+                                     'Cohen',
+                                     'Glacier',
+                                     'Peterson Jul 02',
+                                     'PtAdam Jul 02',
+                                     'Pogibshi Jul 02'],
+        "ctd_transects_otf_kbnerr": ['OTF KBNERR (repeated)'],
+        "ctd_transects_uaf": ['UAF (repeated)'], 
+        "hfradar": ['Lower Cook Inlet System B (2006-2007)','Upper Cook Inlet System A (2002-2003)','Upper Cook Inlet System A (2009)']
+               }
+
+
+
+def map_cell(slug):
+    
+    # map cell
+    code = f"""\
+cat = intake.open_catalog(cic.utils.cat_path("{slug}"))
+dd, ddlabels = cic.utils.combine_datasets_for_map(cat)
+map = cat.metadata["map"]
+maplabels = cat.metadata["maplabels"]
+dd.hvplot(**map) * ddlabels.hvplot(**maplabels)
+"""
+    codecell = nbf.v4.new_code_cell(code)
+    codecell['metadata']['tags'] = ["remove-input"]
+    return codecell
+
+
+def map_cell_ctd_transects(slug):
+    """Create a map cell for CTD transects."""
+    # map cell
+    code = f"""\
+cat = intake.open_catalog(cic.utils.cat_path("{slug}"))
+dd, ddlabels = cic.utils.combine_datasets_for_map(cat)
+map = cat.metadata["map"]
+maplabels = cat.metadata["maplabels"]
+imatches = dd["station"].str.fullmatch("|".join({source_names[slug]}))
+dduse = dd.loc[imatches]
+ddlabelsuse = ddlabels.loc[imatches].copy()
+ddlabelsuse["Station names"] = {line_names[slug]}
+maplabels = cat.metadata["maplabels"].copy()
+maplabels["text"] = "Station names"
+dduse.hvplot(**cat.metadata["map"]) * ddlabelsuse.hvplot(**maplabels)
+"""
+    codecell = nbf.v4.new_code_cell(code)
+    codecell['metadata']['tags'] = ["remove-input"]
+    return codecell
+
 
 def station_intersect_with_years(minTime, maxTime):
     # if there is any overlap between data and years, include
@@ -56,6 +142,8 @@ def generate_page(slug, not_in_jupyter_book):
 * {slug}
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/{slug}.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/{slug}.html).
+
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
 """
 
     # Add these cells to the notebook
@@ -66,8 +154,8 @@ See the original full dataset description page in the [original report](https://
 
 #Then refer to the figure with {{numref}}`Figure {{number}}<fig-map>`
     # Add map markdown cell
-    nb['cells'].append(pu.map_cell(slug))
-    # nb['cells'].extend([pu.map_cell(slug, cat.metadata["map_description"], label="", caption=""),])
+    nb['cells'].append(map_cell(slug))
+    # nb['cells'].extend([map_cell(slug, cat.metadata["map_description"], label="", caption=""),])
     
     ## Overall summary of statistics
     dfstats = mu.aggregate_overall_stats(slug)
@@ -243,6 +331,7 @@ Detailed model-data comparison page: {{ref}}`HF Radar model-data comparison page
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/{slug}.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/{slug}.html).
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
 
 [8MB zipfile of plots](https://files.axds.co/ciofs_fresh/zip/hfradar.zip)
 """
@@ -253,7 +342,31 @@ See the original full dataset description page in the [original report](https://
 #Then refer to the figure with {{numref}}`Figure {{number}}<fig-map>`
 
     # Add map markdown cell
-    nb['cells'].append(pu.map_cell(slug))
+    nb['cells'].append(map_cell_ctd_transects(slug))
+
+    text = f"""\
+## Taylor Diagrams
+
+Taylor diagrams summarize the skill of the two models in capturing the HF Radar datasets. The data has been grouped by region (Figs. {{numref}}`{{number}}<fig-hfradar_by_region_north>` and {{numref}}`{{number}}<fig-hfradar_by_region_east>`). Correlations are higher for the northward tidal component of velocity, which is most along-channel oriented for the HF Radar areas, than for the eastward component, and CIOFS Hindcast and Fresh perform similarly. The subtidal components are poorly captured by both models: low correlations for the eastward component and even lower and negative (not shown on plot) for the northward component. Skill scores are shown in the next plots for each dataset.
+
+
+
+```{{figure}} ../figures/taylor_diagrams/hfradar_by_region_north.png
+---
+name: fig-hfradar_by_region_north
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for north-south velocity component for the full tidal signal (left) and subtidal signal (right), grouped by region of Cook Inlet, for HF Radar data.
+```
+
+```{{figure}} ../figures/taylor_diagrams/hfradar_by_region_east.png
+---
+name: fig-hfradar_by_region_east
+---
+Taylor Diagram summarizing skill of CIOFS Hindcast (stars) and CIOFS Fresh (triangles) for east-west velocity component for the full tidal signal (left) and subtidal signal (right), grouped by region of Cook Inlet, for HF Radar data.
+```
+"""
+
+    nb['cells'].append(pu.text_cell(text))
 
     ## Loop over models first
     for model_name in mu.models:
@@ -306,6 +419,8 @@ def hfradar(slug, not_in_jupyter_book):
 * {slug}
 
 See the full dataset page for more information: {{ref}}`page:{slug}`
+
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
 """
 
     nb['cells'].append(pu.text_cell(text))
@@ -314,8 +429,8 @@ See the full dataset page for more information: {{ref}}`page:{slug}`
 #Then refer to the figure with {{numref}}`Figure {{number}}<fig-map>`
 
     # Add map markdown cell
-    nb['cells'].append(pu.map_cell(slug))
-    # nb['cells'].append(pu.map_cell(slug, cat.metadata["map_description"], label="", caption=""))
+    nb['cells'].append(map_cell_ctd_transects(slug))
+    # nb['cells'].append(map_cell(slug, cat.metadata["map_description"], label="", caption=""))
 
 
     # TIDAL ELLIPSES #
@@ -462,6 +577,7 @@ def adcp(slug, not_in_jupyter_book):
 
     cat = intake.open_catalog(cic.utils.cat_path(slug))
     source_names = list(cat)
+    source_names = [source_name for source_name in source_names if "0301" not in source_name and "0303" not in source_name]
 
     # link project out directories to comparison page dir so can use the 
     # images as relative paths
@@ -482,6 +598,8 @@ def adcp(slug, not_in_jupyter_book):
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/{slug}.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/{slug}.html).
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
+
 """
 
     nb['cells'].append(pu.text_cell(text))
@@ -490,7 +608,7 @@ See the original full dataset description page in the [original report](https://
 #Then refer to the figure with {{numref}}`Figure {{number}}<fig-map>`
 
     # Add map markdown cell
-    nb['cells'].append(pu.map_cell(slug))
+    nb['cells'].append(map_cell(slug))
 
     ## Loop over source names
     for source_name in source_names:
@@ -504,7 +622,8 @@ See the original full dataset description page in the [original report](https://
 
             nb['cells'].append(pu.text_cell(pu.header_text(which_tidal.capitalize(), header=3)))
             
-            varnames = ["speed", "along", "across"]
+            varnames = ["speed_rotate", "east_rotate", "north_rotate"]
+            # varnames = ["speed", "along", "across"]
             vardescs = ["Horizontal Speed", "Along-Channel Velocity", "Across-Channel Velocity"]
             for varname, vardesc in zip(varnames, vardescs):
 
@@ -557,6 +676,8 @@ def ctd_transects(slug, not_in_jupyter_book):
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/{slug}.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/{slug}.html).
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
+
 """
 
     nb['cells'].append(pu.text_cell(text))
@@ -564,10 +685,10 @@ See the original full dataset description page in the [original report](https://
 
 #Then refer to the figure with {{numref}}`Figure {{number}}<fig-map>`
 
-    nb['cells'].append(pu.map_cell(slug))
+    nb['cells'].append(map_cell_ctd_transects(slug))
 
     # Add map markdown cell
-    # nb['cells'].append(pu.map_cell(slug, cat.metadata["map_description"], label="", caption=""))
+    # nb['cells'].append(map_cell(slug, cat.metadata["map_description"], label="", caption=""))
 
     ## Loop over source names
     for source_name in source_names:
@@ -626,6 +747,8 @@ def ctd_profiles(slug, not_in_jupyter_book):
 
 See the original full dataset description page in the [original report](https://ciofs.axds.co/outputs/pages/data/{slug}.html) for more information or the new [catalog page](https://cook-inlet-catalogs.readthedocs.io/en/latest/demo_notebooks/{slug}.html).
 
+Note that the map shows all datasets from the catalog; it is not limited to the current report time periods.
+
 """
 
     nb['cells'].append(pu.text_cell(text))
@@ -633,7 +756,7 @@ See the original full dataset description page in the [original report](https://
 
 #Then refer to the figure with {{numref}}`Figure {{number}}<fig-map>`
     # map cell
-    nb['cells'].append(pu.map_cell(slug))
+    nb['cells'].append(map_cell(slug))
 
 #     code = f"""\
 # cat = intake.open_catalog(cic.utils.cat_path("{slug}"))

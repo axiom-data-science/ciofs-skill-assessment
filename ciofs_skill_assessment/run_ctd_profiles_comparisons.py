@@ -19,11 +19,11 @@ cat_model = intake.open_catalog("ciofs_skill_assessment/models.yaml")
 
 
 slugs = [
-#   "ctd_profiles_2005_noaa",
+  "ctd_profiles_2005_noaa",
     "ctd_profiles_kachemack_kuletz_2005_2007",
-    # "ctd_profiles_kb_small_mesh_2006",
+    "ctd_profiles_kb_small_mesh_2006",
 ]
-models = ["ciofs_fresh"]
+models = ["ciofs_fresh","ciofs_hindcast"]
 # models = ["ciofs_hindcast"]
 key_variables=["temp","salt"]
 vardescs = ["Sea temperature [C]", "Salinity"]

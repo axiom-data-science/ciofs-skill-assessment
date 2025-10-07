@@ -89,7 +89,8 @@ def calculate_ss(obs, model, key):
     for i in range(obs.cf[key].shape[1]):
         for j in range(obs.cf[key].shape[2]):
             if not obs.cf[key][:,i,j].isnull().all() and not model.cf[key][:,i,j].isnull().all():
-                ssarr[i,j] = omsa.stats.compute_murphy_skill_score(obs.cf[key][:,i,j], model.cf[key].squeeze()[:,i,j])
+                ssarr[i,j] = omsa.stats.compute_taylor_skill_score(obs.cf[key][:,i,j], model.cf[key].squeeze()[:,i,j])
+                # ssarr[i,j] = omsa.stats.compute_murphy_skill_score(obs.cf[key][:,i,j], model.cf[key].squeeze()[:,i,j])
     ss = xr.Dataset()
     ss[key] = (("x", "y"), ssarr)
     ss = ss.assign_coords({"lon": model["lon"], "lat": model["lat"]})
@@ -145,15 +146,19 @@ def plot(model_name, source_name, which, extent):
 
     key = f"{model_name}_{which}_east"
     omsa.plot.map.setup_ax(axes[0], left_labels=True, bottom_labels=True, top_labels=False, fontsize=12)
-    ss[source_name][key].plot(x="lon", y="lat", vmin=-1, ax=axes[0], transform=omsa.plot.map.pc, 
-                              cmap=cmo.curl, add_colorbar=False)
+    ss[source_name][key].plot(x="lon", y="lat", vmin=0, ax=axes[0], transform=omsa.plot.map.pc, 
+                              cmap=cmo.matter, add_colorbar=False)
+    # ss[source_name][key].plot(x="lon", y="lat", vmin=-1, ax=axes[0], transform=omsa.plot.map.pc, 
+    #                           cmap=cmo.curl, add_colorbar=False)
     axes[0].set_extent(extent)
     axes[0].set_title("Eastward Surface Velocity [m/s]", fontsize=fs)
 
     key = f"{model_name}_{which}_north"
     omsa.plot.map.setup_ax(axes[1], left_labels=False, bottom_labels=True, top_labels=False, fontsize=14)
-    mappable = ss[source_name][key].plot(x="lon", y="lat", vmin=-1, ax=axes[1], transform=omsa.plot.map.pc, 
-                                         cmap=cmo.curl, add_colorbar=False)
+    mappable = ss[source_name][key].plot(x="lon", y="lat", vmin=0, ax=axes[1], transform=omsa.plot.map.pc, 
+                                         cmap=cmo.matter, add_colorbar=False)
+    # mappable = ss[source_name][key].plot(x="lon", y="lat", vmin=-1, ax=axes[1], transform=omsa.plot.map.pc, 
+    #                                      cmap=cmo.curl, add_colorbar=False)
     axes[1].set_extent(extent)
     axes[1].set_title("Northward Surface Velocity [m/s]", fontsize=fs)
 

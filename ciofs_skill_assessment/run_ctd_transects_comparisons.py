@@ -18,15 +18,14 @@ cat_model = intake.open_catalog("ciofs_skill_assessment/models.yaml")
 
 
 slugs = [        
-        #  "ctd_transects_barabara_to_bluff_2002_2003",
+         "ctd_transects_barabara_to_bluff_2002_2003",
         "ctd_transects_otf_kbnerr",  
-        # "ctd_transects_cmi_kbnerr",  #
-        # "ctd_transects_cmi_uaf", 
-        # "ctd_transects_gwa", #
-        # "ctd_transects_uaf",  #
+        "ctd_transects_cmi_kbnerr",  #
+        "ctd_transects_cmi_uaf", 
+        "ctd_transects_gwa", #
+        "ctd_transects_uaf",  #
 ]
-models = ["ciofs_fresh"]
-# models = ["ciofs_hindcast"]
+models = ["ciofs_fresh", "ciofs_hindcast"]
 key_variables=["temp","salt"]
 vardescs = ["Sea temperature [C]", "Salinity"]
 
@@ -47,6 +46,13 @@ for slug in slugs:
         project_name = f"{slug}_{model}"
 
         for key_variable, vardesc in zip(key_variables, vardescs):
+            # add to kwargs_plot
+            if key_variable == "temp":
+                kwargs_plot["vmin_diff"] = -3
+                kwargs_plot["vmax_diff"] = 3
+            elif key_variable == "salt":
+                kwargs_plot["vmin_diff"] = -2
+                kwargs_plot["vmax_diff"] = 2
             slugdesc = (" ".join(slug.split("ctd_transects_")[1].split("_"))).title()
             plot_description = f"{slugdesc}: {vardesc} from CTD transect"
             omsa.run(project_name=project_name, catalogs=cat, model_name=cat_model,
